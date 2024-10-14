@@ -5,7 +5,7 @@ import Card from "@/app/components/VoteCard";
 import AdvertCard from "@/app/components/AdvertCard"; // Import AdvertCard
 import { voteOptions } from "@/VoteeData"; // Import your scraped data
 import Image from "next/image";
-import logo from "@/public/Images/thebest.png";
+// import logo from "@/public/Images/thebest.png";
 import "@/app/assets/Styles/Card.css";
 import "@/app/assets/Styles/Navbar.css";
 import "@/app/assets/Styles/background-styles.css";
@@ -17,8 +17,8 @@ interface VoteResult {
 }
 
 type Page = "vote" | "results";
-const CACHE_KEY = "votingResults";
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes in milliseconds
+const CACHE_KEY = "votingData";
+const CACHE_TTL = 20 * 60 * 1000; // 20 minutes in milliseconds
 
 export default function VotingPage() {
   const [results, setResults] = useState<VoteResult[]>([]);
@@ -28,47 +28,35 @@ export default function VotingPage() {
   const [cooldownMinutes, setCooldownMinutes] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState<Page>("vote");
   const [hasVoted, setHasVoted] = useState(false); // Track if user has voted
-  const [isCheckingVote, setIsCheckingVote] = useState(true); // Track if we are checking vote status
+  // const [isCheckingVote, setIsCheckingVote] = useState(true); // Track if we are checking vote status
 
   useEffect(() => {
-    const checkIfVoted = async () => {
-      try {
-        const response = await fetch("/api/check-vote"); // You'll need to create this API endpoint
-        const data = await response.json();
-        setHasVoted(data.hasVoted); // If true, user has already voted
-      } catch (err) {
-        console.error("Error checking vote status:", err);
-      }
-    };
-
-    checkIfVoted();
+    fetchVotingData();
   }, []);
 
-  useEffect(() => {
-    fetchResults();
-  }, []);
-
-  const fetchResults = async () => {
+  const fetchVotingData = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // Check for cached results
+      // Check for cached data
       const cachedData = localStorage.getItem(CACHE_KEY);
       if (cachedData) {
         const { data, timestamp } = JSON.parse(cachedData);
         if (Date.now() - timestamp < CACHE_TTL) {
-          setResults(data);
+          setResults(data.results);
+          setHasVoted(data.hasVoted);
           setIsLoading(false);
           return;
         }
       }
 
-      // Fetch new results if cache is invalid or doesn't exist
-      const response = await fetch("/api/results");
-      if (!response.ok) throw new Error("Failed to fetch results");
+      // Fetch new data if cache is invalid or doesn't exist
+      const response = await fetch("/api/voting-data");
+      if (!response.ok) throw new Error("Failed to fetch voting data");
       const data = await response.json();
-      setResults(data);
+      setResults(data.results);
+      setHasVoted(data.hasVoted);
 
       // Update cache
       localStorage.setItem(
@@ -79,10 +67,10 @@ export default function VotingPage() {
         })
       );
     } catch (err) {
-      setError("Error loading results. Please try again later.");
-      console.error("Error fetching results:", err);
+      setError("Error loading voting data. Please try again later.");
+      console.error("Error fetching voting data:", err);
     } finally {
-      setIsCheckingVote(false); // Mark checking complete
+      setIsLoading(false);
     }
   };
 
@@ -100,14 +88,23 @@ export default function VotingPage() {
       if (response.ok) {
         setMessage(data.message);
         setCooldownMinutes(null);
-        await fetchResults(); // Refresh results after voting
-        setHasVoted(true)
+        setResults(data.updatedResults);
+        setHasVoted(true);
+
+        // Update local cache
+        const cachedData = localStorage.getItem(CACHE_KEY);
+        if (cachedData) {
+          const parsedData = JSON.parse(cachedData);
+          parsedData.data.results = data.updatedResults;
+          parsedData.data.hasVoted = true;
+          localStorage.setItem(CACHE_KEY, JSON.stringify(parsedData));
+        }
       } else {
+        setHasVoted(true);
         setMessage(data.message);
         if (data.cooldownRemaining) {
           setCooldownMinutes(data.cooldownRemaining);
         }
-        setHasVoted(true)
       }
     } catch (error) {
       setMessage("Error casting vote. Please try again.");
@@ -165,7 +162,7 @@ export default function VotingPage() {
           {message}
         </p>
       )}
-      {isCheckingVote ? (
+      {isLoading ? (
         <p>Checking your voting status...</p> // Indicate that we are checking
       ) : hasVoted ? (
         <p className="thanks-message">You have already voted. Thanks for participating! 🎉</p>
@@ -240,7 +237,7 @@ export default function VotingPage() {
       <div className="logo-container">
         <Image
           className="logo"
-          src={logo}
+          src="https://raw.githubusercontent.com/Madiocre/vote-images/main/thebest.png"
           alt="Logo"
           // layout="responsive"
           width={300}
