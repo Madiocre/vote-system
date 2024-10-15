@@ -74,6 +74,19 @@ export default function VotingPage() {
     }
   };
 
+  const updateLocalCache = (
+    hasVoted: boolean,
+    updatedResults: VoteResult[]
+  ) => {
+    const cachedData = localStorage.getItem(CACHE_KEY);
+    if (cachedData) {
+      const parsedData = JSON.parse(cachedData);
+      parsedData.data.results = updatedResults;
+      parsedData.data.hasVoted = hasVoted;
+      localStorage.setItem(CACHE_KEY, JSON.stringify(parsedData));
+    }
+  };
+
   const handleVote = async (optionName: string) => {
     try {
       setMessage("");
@@ -92,18 +105,27 @@ export default function VotingPage() {
         setHasVoted(true);
 
         // Update local cache
-        const cachedData = localStorage.getItem(CACHE_KEY);
-        if (cachedData) {
-          const parsedData = JSON.parse(cachedData);
-          parsedData.data.results = data.updatedResults;
-          parsedData.data.hasVoted = true;
-          localStorage.setItem(CACHE_KEY, JSON.stringify(parsedData));
-        }
+        updateLocalCache(true, data.updatedResults);
+        // const cachedData = localStorage.getItem(CACHE_KEY);
+        // if (cachedData) {
+        //   const parsedData = JSON.parse(cachedData);
+        //   parsedData.data.results = data.updatedResults;
+        //   parsedData.data.hasVoted = true;
+        //   localStorage.setItem(CACHE_KEY, JSON.stringify(parsedData));
+        // }
       } else {
         setHasVoted(true);
         setMessage(data.message);
         if (data.cooldownRemaining) {
           setCooldownMinutes(data.cooldownRemaining);
+        }
+        // Even if the vote failed due to previous vote, update local cache
+        if (
+          data.message.includes(
+            "A vote has already been cast from this location recently"
+          )
+        ) {
+          updateLocalCache(true, results);
         }
       }
     } catch (error) {
@@ -165,7 +187,9 @@ export default function VotingPage() {
       {isLoading ? (
         <p>Checking your voting status...</p> // Indicate that we are checking
       ) : hasVoted ? (
-        <p className="thanks-message">You have already voted. Thanks for participating! 🎉</p>
+        <p className="thanks-message">
+          You have already voted. Thanks for participating! 🎉
+        </p>
       ) : (
         <div className="card-grid">
           {voteOptions.map((option, index) => (
@@ -259,7 +283,10 @@ export default function VotingPage() {
               </li>{" "}
               |
               <li>
-                <a href="https://www.linkedin.com/in/ahmed-shalaby-31a03a235/" target="_blank">
+                <a
+                  href="https://www.linkedin.com/in/ahmed-shalaby-31a03a235/"
+                  target="_blank"
+                >
                   LinkedIn
                 </a>
               </li>
